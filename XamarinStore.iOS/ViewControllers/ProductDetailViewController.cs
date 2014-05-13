@@ -38,37 +38,69 @@ namespace XamarinStore.iOS
 				},
 				ButtonTapped = async () => await addToBasket ()
 			});
+
 		}
 
-		async Task addToBasket()
+		public override void ViewDidLoad ()
 		{
+			base.ViewDidLoad ();
+			AppDelegate.Shared.AddToBasketComplete += async (result) => await HandleAddToBasketComplete(result);
+		}
+			
+		private async Task HandleAddToBasketComplete(bool result)
+		{
+			if (!result && NavigationController != null) {
+				await RemoveFromBasket ();
+				(new UIAlertView("Don't be greedy!", "We currently only allow one free t-shirt per person.", 
+					null,"Ok, sorry...")).Show();
+			}
+
+			BottomView.Button.Enabled = true;
+		}
+
+		private async Task SetupBasketAnimation(bool reverse = false)
+		{
+			BottomView.Button.Enabled = false;
 			var center = BottomView.Button.ConvertPointToView (BottomView.Button.ImageView.Center, NavigationController.View);
-			var imageView = new UIImageView (tshirtIcon) {
+			var tshirtImageView = new UIImageView (tshirtIcon) { 
 				Center = center,
 				ContentMode = UIViewContentMode.ScaleAspectFill
 			};
-			var backgroundView = new UIImageView (UIImage.FromBundle("circle")) {
+			var circle = (reverse) ? "redcircle" : "circle";
+			var backgroundView = new UIImageView (UIImage.FromBundle(circle)) {
 				Center = center,
 			};
 			NavigationController.View.AddSubview (backgroundView);
-			NavigationController.View.AddSubview (imageView);
+			NavigationController.View.AddSubview (tshirtImageView);
 			await Task.WhenAll (new [] {
-				animateView (imageView),
-				animateView (backgroundView),
+				animateView (tshirtImageView, reverse),
+				animateView (backgroundView, reverse),
 			});
 
 			NavigationItem.RightBarButtonItem = AppDelegate.Shared.CreateBasketButton ();
+		}
 
+		private async Task addToBasket()
+		{
+			await SetupBasketAnimation ();
 			AddToBasket (CurrentProduct);
+		}
 
+		async Task RemoveFromBasket()
+		{
+			await SetupBasketAnimation (true);
 		}
 
 
-		async Task animateView(UIView view)
+		async Task animateView(UIView view, bool reverse = false)
 		{
 			var size = view.Frame.Size;
 			var grow = new SizeF(size.Width * 1.7f, size.Height * 1.7f);
 			var shrink = new SizeF(size.Width * .4f, size.Height * .4f);
+
+			var endPoint = new PointF (290, 34);
+			var controlPoint = new PointF (view.Center.X, View.Center.Y);
+
 			TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool> ();
 			//Set the animation path
 			var pathAnimation = CAKeyFrameAnimation.GetFromKeyPath("position");	
@@ -78,26 +110,51 @@ namespace XamarinStore.iOS
 			pathAnimation.Duration = .5;
 
 			UIBezierPath path = new UIBezierPath ();
-			path.MoveTo (view.Center);
-			path.AddQuadCurveToPoint (new PointF (290, 34), new PointF(view.Center.X,View.Center.Y));
+
+			if (reverse) {
+				path.MoveTo (endPoint);
+				path.AddQuadCurveToPoint (view.Center, controlPoint);
+			}
+			else {
+				path.MoveTo (view.Center);
+				path.AddQuadCurveToPoint (endPoint, controlPoint);
+			}
+				
 			pathAnimation.Path = path.CGPath;
 
 			//Set size change
-			var growAnimation = CABasicAnimation.FromKeyPath("bounds.size");
-			growAnimation.To = NSValue.FromSizeF (grow);
-			growAnimation.FillMode = CAFillMode.Forwards;
-			growAnimation.Duration = .1;
-			growAnimation.RemovedOnCompletion = false;
+			CABasicAnimation growAnimation;
+			CABasicAnimation shrinkAnimation;
+			if (reverse) {
+				growAnimation = CABasicAnimation.FromKeyPath ("bounds.size");
+				growAnimation.From = NSValue.FromSizeF (shrink);
+				growAnimation.To = NSValue.FromSizeF (grow);
+				growAnimation.FillMode = CAFillMode.Forwards;
+				growAnimation.Duration = .4;
+				growAnimation.RemovedOnCompletion = false;
 
+				shrinkAnimation = CABasicAnimation.FromKeyPath ("bounds.size");
+				shrinkAnimation.To = NSValue.FromSizeF (shrink);
+				shrinkAnimation.FillMode = CAFillMode.Forwards;
+				shrinkAnimation.Duration = .1;
+				shrinkAnimation.RemovedOnCompletion = false;
+				shrinkAnimation.BeginTime = .4;
+			}
+			else {
+				growAnimation = CABasicAnimation.FromKeyPath("bounds.size");
+				growAnimation.To = NSValue.FromSizeF (grow);
+				growAnimation.FillMode = CAFillMode.Forwards;
+				growAnimation.Duration = .1;
+				growAnimation.RemovedOnCompletion = false;
 
-
-			var shrinkAnimation = CABasicAnimation.FromKeyPath("bounds.size");
-			shrinkAnimation.To = NSValue.FromSizeF (shrink);
-			shrinkAnimation.FillMode = CAFillMode.Forwards;
-			shrinkAnimation.Duration = .4;
-			shrinkAnimation.RemovedOnCompletion = false;
-			shrinkAnimation.BeginTime = .1;
-
+				shrinkAnimation = CABasicAnimation.FromKeyPath("bounds.size");
+				shrinkAnimation.From = NSValue.FromSizeF (grow);
+				shrinkAnimation.To = NSValue.FromSizeF (shrink);
+				shrinkAnimation.FillMode = CAFillMode.Forwards;
+				shrinkAnimation.Duration = .4;
+				shrinkAnimation.RemovedOnCompletion = false;
+				shrinkAnimation.BeginTime = .1;
+			}
 
 			CAAnimationGroup animations = new CAAnimationGroup ();
 			animations.FillMode = CAFillMode.Forwards;
@@ -107,6 +164,7 @@ namespace XamarinStore.iOS
 				growAnimation,
 				shrinkAnimation,
 			};
+
 			animations.Duration = .5;
 			animations.AnimationStopped += (sender, e) => {
 				tcs.TrySetResult(true);

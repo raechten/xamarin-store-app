@@ -18,6 +18,8 @@ namespace XamarinStore.iOS
 		UIWindow window;
 		UINavigationController navigation;
 
+		public event Action<bool> AddToBasketComplete = delegate {};
+
 		public override bool FinishedLaunching (UIApplication app, NSDictionary options)
 		{
 			Shared = this;
@@ -46,8 +48,13 @@ namespace XamarinStore.iOS
 		{
 			var productDetails = new ProductDetailViewController (product);
 			productDetails.AddToBasket += p => {
-				WebService.Shared.CurrentOrder.Add (p);
-				UpdateProductsCount();
+				var result = WebService.Shared.CurrentOrder.Add(p);
+				if (result) {
+					UpdateProductsCount();
+				}
+
+				if (AddToBasketComplete != null)
+					AddToBasketComplete(result);
 			};
 			navigation.PushViewController (productDetails, true);
 		}
@@ -97,6 +104,7 @@ namespace XamarinStore.iOS
 			button.ItemsCount = WebService.Shared.CurrentOrder.Products.Count;
 			return new UIBarButtonItem (button);
 		}
+
 		public void UpdateProductsCount()
 		{
 			button.UpdateItemsCount(WebService.Shared.CurrentOrder.Products.Count);

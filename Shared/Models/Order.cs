@@ -18,12 +18,24 @@ namespace XamarinStore
 			}
 		}
 
-		public void Add (Product product)
+		public bool CanAdd(Product product)
 		{
+			// We could do more things here, like check availability of the requested product
+			// For now, just check that we don't have a product yet (only one tshirt per order)
+			return (products.Count == 0);
+		}
+
+		public bool Add (Product product)
+		{
+			if (!CanAdd (product))
+				return false;
+
 			products.Insert (0,(Product)product.Clone());
 			var evt = ProductsChanged;
 			if (evt != null)
 				evt (this, EventArgs.Empty);
+
+			return true;
 		}
 
 		public bool Remove (Product product)

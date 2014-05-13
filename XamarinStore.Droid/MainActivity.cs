@@ -6,6 +6,7 @@ using Android.App;
 using Android.Views;
 using Android.Util;
 using Android.Content.PM;
+using Android.Widget;
 
 namespace XamarinStore
 {
@@ -106,7 +107,10 @@ namespace XamarinStore
 			var productDetails = new ProductDetailsFragment (product, itemVerticalOffset);
 
 			productDetails.AddToBasket += p => {
-				WebService.Shared.CurrentOrder.Add (p);
+				if (!WebService.Shared.CurrentOrder.Add (p)) {
+					Toast.MakeText (this,"Don't be greedy! We currently only allow one free t-shirt per person.",ToastLength.Long)
+						 .Show();
+				}
 
 				SetupActionBar ();
 			};
